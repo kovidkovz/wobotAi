@@ -1,9 +1,9 @@
 package main
 
-// Message defines the JSON structure for WebSocket communication
+// Message is just a structure that tells us what a message looks like
 type Message struct {
-	Type    string `json:"type"`             // "broadcast", "direct", "register"
-	Target  string `json:"target,omitempty"` // Target Client ID (for direct messages)
-	Content string `json:"content"`          // The actual message content
-	From    string `json:"from,omitempty"`   // Sender ID (server fills this)
+	Type    string `json:"type"`             // What kind of message is this? Broadcast, direct, register
+	Target  string `json:"target,omitempty"` // Who is this message for? (If it's a secret)
+	Content string `json:"content"`          // The actual text or data being sent
+	From    string `json:"from,omitempty"`   // Who sent this? (Server will figure this out)
 }

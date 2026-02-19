@@ -5,22 +5,21 @@ import (
 	"sync"
 )
 
-// Hub maintains the set of active clients and broadcasts messages to the
-// clients.
+// Hub is like a chat room manager. It keeps track of everyone and sends messages around.
 type Hub struct {
-	// Registered clients.
+	// All the people currently connected
 	clients map[string]*Client
 
-	// Inbound messages from the clients.
+	// Messages waiting to be sent out
 	broadcast chan *Message
 
-	// Register requests from the clients.
+	// New people trying to join
 	register chan *Client
 
-	// Unregister requests from clients.
+	// People trying to leave
 	unregister chan *Client
 
-	// Mutex to protect the clients map
+	// A lock to make sure we don't mess up the client list when multiple things happen at once
 	mu sync.RWMutex
 }
 
@@ -61,7 +60,7 @@ func (h *Hub) handleMessage(msg *Message) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	// If a specific target is set, try to send to that client
+	// If this message is meant for a specific person, let's try to send it to them
 	if msg.Target != "" {
 		if client, ok := h.clients[msg.Target]; ok {
 			select {
@@ -74,10 +73,9 @@ func (h *Hub) handleMessage(msg *Message) {
 		return
 	}
 
-	// Otherwise, broadcast to all
+	// Otherwise, shout it out to everyone!
 	for id, client := range h.clients {
-		// Don't send back to sender for broadcast (optional, but good practice usually)
-		// But here we might want echo. Let's send to all for now.
+		// Usually we wouldn't echo back to the sender, but let's just send it to everyone for now.
 		select {
 		case client.send <- []byte(msg.Content):
 		default:
@@ -87,7 +85,7 @@ func (h *Hub) handleMessage(msg *Message) {
 	}
 }
 
-// getClients returns a list of connected client IDs.
+// getClients helps us see a list of everyone who is online.
 func (h *Hub) getClients() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()

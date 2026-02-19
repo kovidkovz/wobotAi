@@ -11,16 +11,16 @@ import (
 )
 
 const (
-	// Time allowed to write a message to the peer.
+	// How long we wait to send a message before giving up.
 	writeWait = 10 * time.Second
 
-	// Time allowed to read the next pong message from the peer.
+	// How long we wait for a 'alive' signal from the client.
 	pongWait = 60 * time.Second
 
-	// Send pings to peer with this period. Must be less than pongWait.
+	// How often we poke the client to see if they are still there. Must be less than pongWait.
 	pingPeriod = (pongWait * 9) / 10
 
-	// Maximum message size allowed from peer.
+	// The biggest message we allow.
 	maxMessageSize = 512
 )
 
@@ -28,21 +28,21 @@ var (
 	newline = []byte{'\n'}
 )
 
-// Client is a middleman between the websocket connection and the hub.
+// Client represents a single user connected to our server.
 type Client struct {
 	hub *Hub
 
-	// Unique ID for the client
+	// A unique name tag for this user
 	ID string
 
-	// The websocket connection.
+	// The actual connection line to the user.
 	conn *websocket.Conn
 
-	// Buffered channel of outbound messages.
+	// A queue of messages waiting to be sent to this user.
 	send chan []byte
 }
 
-// readPump pumps messages from the websocket connection to the hub.
+// readPump listens for messages coming from this user and passes them to the Hub.
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
@@ -63,8 +63,7 @@ func (c *Client) readPump() {
 		// Parse JSON message
 		var msg Message
 		if err := json.Unmarshal(message, &msg); err != nil {
-			// If not valid JSON, treat as a simple broadcast with empty content or raw content?
-			// For this specific task, let's assume we wrap it as a broadcast.
+			// If the message isn't proper JSON, we'll just wrap it up and send it to everyone.
 			msg = Message{
 				Type:    "broadcast",
 				Content: string(message),
@@ -78,7 +77,7 @@ func (c *Client) readPump() {
 	}
 }
 
-// writePump pumps messages from the hub to the websocket connection.
+// writePump takes messages from the Hub and sends them out to this user.
 func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
@@ -120,20 +119,19 @@ func (c *Client) writePump() {
 	}
 }
 
-// serveWs handles websocket requests from the peer.
+// serveWs handles new people trying to connect via WebSocket.
 func serveWs(hub *Hub, c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Println(err)
 		return
 	}
-	// Generate unique ID
+	// Giving this new person a unique ID
 	id := uuid.New().String()
 	client := &Client{hub: hub, conn: conn, send: make(chan []byte, 256), ID: id}
 	client.hub.register <- client
 
-	// Allow collection of memory referenced by the caller by doing all work in
-	// new goroutines.
+	// Starting completely new background tasks to handle reading and writing for this user.
 	go client.writePump()
 	go client.readPump()
 }

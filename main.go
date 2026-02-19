@@ -13,28 +13,28 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-// Upgrader upgrade HTTP connection to WebSocket
+// Upgrader helps us turn a normal HTTP connection into a WebSocket connection
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all connections for now
+		return true // Letting everyone in for now!
 	},
 }
 
 func main() {
-	// initialize Gin router
+	// Setting up our router using Gin
 	r := gin.Default()
 
 	hub := newHub()
 	go hub.run()
 
-	// simple health check
+	// Just a quick check to see if the server is alive
 	r.GET("/ping", func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"message": "pong",
 		})
 	})
 
-	// Get active clients
+	// Let's see who is currently connected
 	r.GET("/clients", func(c *gin.Context) {
 		ids := hub.getClients()
 		c.JSON(200, gin.H{
@@ -43,7 +43,7 @@ func main() {
 		})
 	})
 
-	// WebSocket endpoint
+	// This is where the WebSocket magic happens
 	r.GET("/ws", func(c *gin.Context) {
 		serveWs(hub, c)
 	})
@@ -53,26 +53,21 @@ func main() {
 		Handler: r,
 	}
 
-	// Initializing the server in a goroutine so that
-	// it won't block the graceful shutdown handling below
+	// Starting the server in the background so it doesn't block other important things
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("listen: %s\n", err)
 		}
 	}()
 
-	// Wait for interrupt signal to gracefully shutdown the server with
-	// a timeout of 5 seconds.
+	// Waiting for a signal to stop the server politely
 	quit := make(chan os.Signal, 1)
-	// kill (no param) default send syscall.SIGTERM
-	// kill -2 is syscall.SIGINT
-	// kill -9 is syscall.SIGKILL but can't be catch, so don't need add it
+	// Catching different kill signals to ensure we clean up nicely
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
 	log.Println("Shutting down server...")
 
-	// The context is used to inform the server it has 5 seconds to finish
-	// the request it is currently handling
+	// Giving the server 5 seconds to finish what it's doing before shutting down completely
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(ctx); err != nil {
